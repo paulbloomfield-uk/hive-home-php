@@ -8,7 +8,9 @@
             "email": "paulbloomfield.uk@gmail.com"
         }
     ],
-    "require": {},
+    "require": {
+        "guzzlehttp/guzzle": "^6.3"
+    },
     "autoload": {
         "psr-4": {"Hive\\": "src/Hive/"}
     }
