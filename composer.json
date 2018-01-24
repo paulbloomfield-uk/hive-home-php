@@ -8,5 +8,8 @@
             "email": "paulbloomfield.uk@gmail.com"
         }
     ],
-    "require": {}
+    "require": {},
+    "autoload": {
+        "psr-4": {"Hive\\": "src/Hive/"}
+    }
 }
