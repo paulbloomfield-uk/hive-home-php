@@ -1,0 +1,12 @@
+{
+    "name": "pbuk/hive",
+    "description": "Client for the (unofficial) REST API for the Hive connected home",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Paul Bloomfield",
+            "email": "paulbloomfield.uk@gmail.com"
+        }
+    ],
+    "require": {}
+}
