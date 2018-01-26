@@ -4,6 +4,7 @@ namespace Hive;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request as ClientRequest;
+use GuzzleHttp\Exception\RequestException;
 
 class Hive {
 
@@ -77,9 +78,8 @@ class Hive {
     sessionId:	string(32)
     */
     try {
-      $response = $this->client->send($request);
-      $data = $this->getJsonBody($response);
-      $this->credentials = $data['sessions']['0'];
+      $response = $this->send($request);
+      $this->credentials = $response['json']['sessions']['0'];
       $this->settings['headers']['X-Omnia-Access-Token'] = $this->credentials['sessionId'];
       $this->setClient();
       return $response;
@@ -94,8 +94,38 @@ class Hive {
     return $request;
   }
 
-  public function getJsonBody($response, bool $asArray = true) {
-    return json_decode((string) $response->getBody(), $asArray);
+
+  protected function send($request) {
+    try {
+      return $this->response($this->client->send($request));
+    } catch (RequestException $error) {
+      throw $error;
+      return $this->errorResponse($error);
+    } catch (\Throwable $error) {
+      throw $error;
+    }
+  }
+
+  protected function errorResponse($error) {
+    if ($error->hasResponse()) {
+      $response = $error->getResponse();
+      return [
+        'status' => $response->getStatusCode(),
+        'text' => $response->getReasonPhrase(),
+        // 'json' => json_decode((string) $response->getBody(), true),
+        'response' => $response,
+      ];
+    }
+    throw $error;
+  }
+
+  protected function response($response) {
+    return [
+      'status' => $response->getStatusCode(),
+      'text' => $response->getReasonPhrase(),
+      'json' => json_decode((string) $response->getBody(), true),
+      'response' => $response,
+    ];
   }
 
   /**
@@ -103,19 +133,12 @@ class Hive {
   **/
   public function listDevices() {
     $method = 'GET';
-    $path = 'nodes';
+    $path = 'nodess';
     $request = new ClientRequest($method, $path);
-    // --- Async
-    $promise = $this->client->sendAsync($request);
-    $response = $promise->wait();
-    $res = [
-      'text' => $response->getReasonPhrase(),
-      'status' => $response->getStatusCode(),
-      'headers' => $response->getHeaders(),
-      'data' => json_decode((string) $response->getBody(), true),
-      'credentials' => $this->credentials,
-    ];
-    return $res;
+
+    $response = $this->send($request);
+    $response['data'] = $response['json']['nodes'];
+    return $response;
   }
 
   /**
@@ -126,15 +149,9 @@ class Hive {
     $path = 'channels';
     $request = new ClientRequest($method, $path);
 
-    $response = $this->client->send($request);
-    $res = [
-      'text' => $response->getReasonPhrase(),
-      'status' => $response->getStatusCode(),
-      'headers' => $response->getHeaders(),
-      'data' => json_decode((string) $response->getBody(), true),
-      'credentials' => $this->credentials,
-    ];
-    return $res;
+    $response = $this->response($this->client->send($request));
+    $response['data'] = $response['json']['channels'];
+    return $response;
   }
 
   /**
@@ -149,9 +166,11 @@ class Hive {
       foreach ($channels as $channel) {
         // @TODO get MAX, MIN, AVG too
         // if (in_array('DATASET', $channel['supportedOperations'])) {
-        if (in_array('AVG', $channel['supportedOperations'])) {
+        // targetTemperature, controllerState, rssi, signal
+        if (preg_match('/(temperature|battery|targetTemperature|signal)@/', $channel['id'])) {
           $channelId[] = $channel['id'];
         }
+        $channelId = array_flip(array_flip($channelId));
       }
     }
     if (is_array($channelId)) {
@@ -160,26 +179,22 @@ class Hive {
     $method = 'GET';
     $path = "channels/$channelId";
     try {
-      $response = $this->client->request($method, $path, [
+      $start = (time() - 60 * 60 * 24 * 7) * 1000; // unix timestamp **in milliseconds**
+      $duration = 60 * 60 * 24 * 10 * 1000;
+      $response = $this->response($this->client->request($method, $path, [
         'query' => [
-          'start' => (time() - 60 * 60) * 1000, // unix timestamp **in milliseconds**
+          'start' => $start, // unix timestamp **in milliseconds**
+          'end' => $start + $duration, // unix timestamp **in milliseconds**
           'timeUnit' => 'SECONDS',
           'rate' => 1,
-          'operation' => 'MIN',
+          'operation' => 'AVG',
         ],
-      ]);
+      ]));
+      $response['data'] = $response['json']['channels'];
+      return $response;
     } catch (\Throwable $error) {
       return $error;
     }
 
-    // $response = $this->client->send($request);
-    $res = [
-      'text' => $response->getReasonPhrase(),
-      'status' => $response->getStatusCode(),
-      'headers' => $response->getHeaders(),
-      'data' => json_decode((string) $response->getBody(), true),
-      'credentials' => $this->credentials,
-    ];
-    return $res;
   }
 }
